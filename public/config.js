@@ -2,7 +2,8 @@
 // Render will give you a URL like https://family-clock-api.onrender.com
 // Paste it below, keeping the /api at the end.
 if (!window.FAMILY_CLOCK_API_BASE) {
-  window.FAMILY_CLOCK_API_BASE = "https://family-clock-api.onrender.com/api";
+    window.FAMILY_CLOCK_API_BASE = "https://time-hop-scheduler.onrender.com/api";
+
 }
 
 // EDIT THIS after running `node generate-vapid-keys.js` on the server (see
