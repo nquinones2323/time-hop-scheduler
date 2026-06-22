@@ -1,0 +1,71 @@
+rules_version = '2';
+
+// SECURITY NOTE (read this before deploying):
+// There is no auth in phase 1 — a "family" is identified only by an opaque
+// familyId (UUID) that the client generates and stores in localStorage.
+// These rules allow read/write to a family doc and its subcollections to
+// ANYONE who knows that family's ID. This is NOT real access control — it's
+// "security by obscurity" against casual access, not against a motivated
+// attacker who guesses or leaks an ID. It's an acceptable tradeoff for a
+// prototype with no sensitive data (meal/nap times), but should be revisited
+// before this app stores anything more sensitive, and ideally replaced with
+// Firebase Auth + per-family ownership once auth is added.
+//
+// Basic shape validation is included below to catch obvious bad writes
+// (wrong types, missing fields) — this is a safety net, not a substitute
+// for the application layer's own validation.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /families/{familyId} {
+      allow read, write: if isValidFamily(request.resource.data);
+      allow delete: if true;
+
+      function isValidFamily(data) {
+        return data.keys().hasAll(['homeTz', 'destTz', 'soundOn'])
+          && data.homeTz is string
+          && data.destTz is string
+          && data.soundOn is bool;
+      }
+
+      match /members/{memberId} {
+        allow read, delete: if true;
+        allow create, update: if isValidMember(request.resource.data);
+
+        function isValidMember(data) {
+          return data.keys().hasAll(['name', 'order', 'schedule'])
+            && data.name is string
+            && data.name.size() > 0
+            && data.name.size() < 100
+            && data.order is number
+            && data.schedule is list;
+        }
+      }
+
+      match /trips/{tripId} {
+        allow read, delete: if true;
+        allow create, update: if isValidTrip(request.resource.data);
+
+        function isValidTrip(data) {
+          return data.keys().hasAll(['homeTz', 'destTz', 'startDate', 'endDate'])
+            && data.homeTz is string
+            && data.destTz is string
+            && data.startDate is string
+            && data.endDate is string;
+        }
+      }
+
+      match /pushSubscriptions/{subId} {
+        allow read, delete: if true;
+        allow create, update: if isValidSubscription(request.resource.data);
+
+        function isValidSubscription(data) {
+          return data.keys().hasAll(['endpoint', 'keys'])
+            && data.endpoint is string
+            && data.keys is map;
+        }
+      }
+    }
+  }
+}

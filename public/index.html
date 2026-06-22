@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Family Clock" />
+<title>Departures — Family Time Tracker</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #142850;
+    --navy-2: #1d3a6e;
+    --navy-3: #27498a;
+    --cream: #fffaf0;
+    --amber: #ffc94d;
+    --amber-dim: #c99a35;
+    --sky: #8ec9ff;
+    --pink: #ff6f91;
+    --green: #5fd6a8;
+    --alert: #ff5e5e;
+    --alert-bg: #4a1530;
+    --line: rgba(255,250,240,0.14);
+    --line-strong: rgba(255,250,240,0.26);
+    --display: 'Space Grotesk', -apple-system, sans-serif;
+    --mono: 'DM Mono', 'SF Mono', monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--navy);
+    background-image:
+      radial-gradient(circle at 12% 0%, rgba(255,201,77,0.14), transparent 45%),
+      radial-gradient(circle at 92% 8%, rgba(255,111,145,0.10), transparent 45%),
+      radial-gradient(circle at 90% 100%, rgba(142,201,255,0.12), transparent 50%),
+      radial-gradient(circle at 10% 95%, rgba(95,214,168,0.08), transparent 45%);
+    color: var(--cream);
+    font-family: var(--display);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    -webkit-tap-highlight-color: transparent;
+    min-height: 100vh;
+  }
+  #app { max-width: 560px; margin: 0 auto; padding: 1.5rem 1.1rem 3rem; }
+
+  /* Header */
+  .masthead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.9rem;
+    border-bottom: 1px solid var(--line-strong);
+  }
+  .masthead .eyebrow {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--amber);
+  }
+  .masthead h1 {
+    font-size: 19px;
+    font-weight: 600;
+    margin: 2px 0 0;
+    letter-spacing: -0.01em;
+  }
+  .masthead .status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #6fcf97;
+    display: inline-block;
+    margin-right: 6px;
+    box-shadow: 0 0 0 3px rgba(111,207,151,0.18);
+  }
+  .masthead .status-dot.no-trip {
+    background: var(--sky);
+    box-shadow: 0 0 0 3px rgba(142,201,255,0.18);
+  }
+
+  /* Trip context strip */
+  .trip-strip {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--sky);
+    letter-spacing: 0.04em;
+    margin-top: 3px;
+  }
+  .trip-strip .trip-name { color: var(--amber); }
+  .trip-strip button.link-btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--sky);
+    background: none;
+    border: none;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 6px;
+    letter-spacing: 0.04em;
+  }
+  .trip-strip button.link-btn:hover { color: var(--amber); }
+
+  /* Departure board clocks */
+  .board {
+    background: var(--navy-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1.1rem 1.1rem 1rem;
+    margin-bottom: 1.1rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .board::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--amber), transparent 70%);
+  }
+  .board-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .board-col { display: flex; flex-direction: column; }
+  .board-col + .board-col { border-left: 1px solid var(--line); padding-left: 14px; }
+  .col-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--sky);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  select.tz-select {
+    width: 100%;
+    margin-bottom: 10px;
+    font-size: 12px;
+    font-family: var(--mono);
+    padding: 5px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--line-strong);
+    background: var(--navy-3);
+    color: var(--cream);
+  }
+  .flap-time {
+    font-family: var(--mono);
+    font-size: 32px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--cream);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .flap-time .ampm { font-size: 14px; color: var(--amber); margin-left: 4px; }
+  .flap-date {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--sky);
+    margin-top: 4px;
+    letter-spacing: 0.02em;
+  }
+  .flap-date .day-offset {
+    color: var(--amber);
+    margin-left: 4px;
+  }
+  .diff-strip {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--amber);
+    text-align: center;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--line);
+    letter-spacing: 0.03em;
+  }
+
+  /* Alert banners */
+  .alert-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 1.2rem;
+  }
+  .alert-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(135deg, #ff5e5e, #ff8a4d);
+    border: 2px solid #ffd9a0;
+    border-radius: 10px;
+    padding: 16px 16px;
+    font-size: 15px;
+    color: #fff7ec;
+    box-shadow: 0 6px 0 rgba(0,0,0,0.18), 0 10px 24px rgba(255,94,94,0.35);
+    animation: alert-bounce 0.9s cubic-bezier(.36,.07,.19,.97) infinite;
+  }
+  .alert-banner .alert-icon {
+    flex-shrink: 0;
+    font-size: 28px;
+    line-height: 1;
+    filter: drop-shadow(0 2px 0 rgba(0,0,0,0.2));
+  }
+  .alert-banner strong { color: #fff; font-weight: 700; }
+  .alert-banner .alert-body { flex: 1; min-width: 0; font-weight: 600; }
+  .alert-banner .alert-countdown {
+    display: block;
+    font-family: var(--mono);
+    font-size: 15px;
+    color: #fff0d9;
+    margin-top: 4px;
+    letter-spacing: 0.03em;
+    font-weight: 700;
+  }
+  .alert-banner .dismiss-btn {
+    flex-shrink: 0;
+    border: none;
+    background: rgba(255,255,255,0.25);
+    color: #fff;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 9px 12px;
+    cursor: pointer;
+  }
+  .alert-banner .dismiss-btn:hover { background: rgba(255,255,255,0.4); }
+  .alert-banner .dismiss-btn:active { transform: scale(0.92); }
+  @keyframes alert-bounce {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-3px) scale(1.01); }
+  }
+
+  /* Member tabs — scales beyond 2 members (fixes v1 bug #8) */
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 1rem;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+  }
+  .tab-btn {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 14px;
+    padding: 12px 14px;
+    border-radius: 4px;
+    border: 1px solid var(--line-strong);
+    background: var(--navy-2);
+    color: var(--sky);
+    cursor: pointer;
+    position: relative;
+    text-align: left;
+    transition: border-color 0.15s, color 0.15s;
+    flex: 0 0 auto;
+    min-width: 108px;
+    white-space: nowrap;
+  }
+  .tab-btn .tab-sub {
+    display: block;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--sky);
+    opacity: 0.7;
+    margin-top: 3px;
+    font-weight: 400;
+  }
+  .tab-btn.active {
+    background: var(--navy-3);
+    border-color: var(--amber);
+    color: var(--cream);
+  }
+  .tab-btn.active .tab-sub { color: var(--amber); opacity: 1; }
+  .tab-btn.active::after {
+    content: "";
+    position: absolute;
+    left: 10px; right: 10px; bottom: -1px;
+    height: 2px;
+    background: var(--amber);
+  }
+  .tab-btn.add-member-btn {
+    color: var(--amber);
+    border-style: dashed;
+    text-align: center;
+    font-size: 18px;
+    min-width: 52px;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tab-btn.add-member-btn:hover { border-color: var(--amber); background: var(--navy-3); }
+
+  /* Ticket-style schedule */
+  .ticket-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    gap: 8px;
+  }
+  .ticket-head .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--cream);
+  }
+  .ticket-head .section-title span {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--sky);
+    font-weight: 400;
+    display: block;
+    margin-top: 1px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .ticket-head .head-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  button.ghost-btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    padding: 7px 11px;
+    border-radius: 3px;
+    border: 1px solid var(--line-strong);
+    background: transparent;
+    color: var(--sky);
+    cursor: pointer;
+  }
+  button.ghost-btn:hover { border-color: var(--amber); color: var(--amber); }
+  button.ghost-btn:active { transform: scale(0.97); }
+  button.ghost-btn.danger:hover { border-color: var(--alert); color: var(--alert); }
+
+  .schedule-list { display: flex; flex-direction: column; gap: 7px; }
+  .ticket-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--navy-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 9px 10px 9px 0;
+    position: relative;
+  }
+  .ticket-row::before {
+    content: "";
+    width: 4px;
+    align-self: stretch;
+    border-radius: 4px 0 0 4px;
+    background: var(--amber-dim);
+    flex-shrink: 0;
+  }
+  .ticket-row input[type="text"] {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--display);
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    background: transparent;
+    color: var(--cream);
+    padding: 6px 2px;
+  }
+  .ticket-row input[type="text"]:focus { outline: none; }
+  .ticket-row input[type="text"].input-error { outline: 1px solid var(--alert); border-radius: 2px; }
+  .ticket-row input[type="time"] {
+    width: 100px;
+    font-family: var(--mono);
+    font-size: 13px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--navy-3);
+    color: var(--amber);
+    padding: 4px 6px;
+    flex-shrink: 0;
+  }
+  .ticket-row input[type="time"].input-error { border-color: var(--alert); }
+  .ticket-row button.del-btn {
+    flex-shrink: 0;
+    border: none;
+    background: transparent;
+    color: var(--sky);
+    opacity: 0.5;
+    font-size: 14px;
+    padding: 4px 6px;
+    cursor: pointer;
+  }
+  .ticket-row button.del-btn:hover { opacity: 1; color: var(--alert); }
+  .row-warning {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--amber);
+    margin: -2px 0 2px 4px;
+  }
+
+  .empty-state {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--sky);
+    text-align: center;
+    padding: 1.4rem 1rem;
+    border: 1px dashed var(--line-strong);
+    border-radius: 4px;
+  }
+  .empty-state button.ghost-btn { margin-top: 10px; }
+
+  /* Footer */
+  .footer {
+    margin-top: 1.4rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12.5px;
+    color: var(--sky);
+  }
+  .footer label { display: flex; align-items: center; gap: 7px; cursor: pointer; }
+  .footer input[type="checkbox"] { accent-color: var(--amber); width: 14px; height: 14px; }
+  .hint {
+    margin-top: 1.1rem;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--sky);
+    opacity: 0.75;
+    text-align: center;
+    line-height: 1.6;
+    letter-spacing: 0.01em;
+  }
+
+  /* Push notification status card */
+  .push-card {
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: var(--navy-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .push-card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--cream);
+  }
+  .push-card-sub {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--sky);
+    margin-top: 2px;
+    line-height: 1.4;
+  }
+  .push-card-sub.warning { color: var(--amber); }
+  .push-card-sub.error { color: var(--alert); }
+  .push-card button.ghost-btn { flex-shrink: 0; }
+  .push-card button.ghost-btn.subscribed { color: var(--green); border-color: var(--green); }
+
+  /* Sync status */
+  .sync-status {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-align: center;
+    margin-top: 8px;
+    letter-spacing: 0.04em;
+    color: var(--sky);
+    opacity: 0.7;
+    min-height: 14px;
+  }
+  .sync-status.error { color: var(--alert); opacity: 1; }
+
+  /* Modal (used for add member, confirm delete, trip planner) */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(10,18,40,0.72);
+    display: flex; align-items: flex-end; justify-content: center;
+    z-index: 50;
+    padding: 0;
+  }
+  @media (min-width: 480px) {
+    .modal-backdrop { align-items: center; padding: 1rem; }
+  }
+  .modal {
+    background: var(--navy-2);
+    border: 1px solid var(--line-strong);
+    border-radius: 12px 12px 0 0;
+    padding: 1.4rem 1.2rem 1.6rem;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 -8px 32px rgba(0,0,0,0.4);
+  }
+  @media (min-width: 480px) {
+    .modal { border-radius: 10px; box-shadow: 0 12px 40px rgba(0,0,0,0.45); }
+  }
+  .modal h2 {
+    font-size: 16px;
+    margin: 0 0 4px;
+    color: var(--cream);
+  }
+  .modal p.modal-sub {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--sky);
+    margin: 0 0 16px;
+  }
+  .modal label.field-label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--sky);
+    margin-bottom: 6px;
+  }
+  .modal input[type="text"], .modal select {
+    width: 100%;
+    font-family: var(--display);
+    font-size: 15px;
+    padding: 10px 11px;
+    border-radius: 6px;
+    border: 1px solid var(--line-strong);
+    background: var(--navy-3);
+    color: var(--cream);
+    margin-bottom: 14px;
+  }
+  .modal input[type="text"]:focus { outline: 1px solid var(--amber); }
+  .modal .modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 6px;
+  }
+  .modal button.primary-btn {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 14px;
+    padding: 10px 18px;
+    border-radius: 6px;
+    border: none;
+    background: var(--amber);
+    color: var(--navy);
+    cursor: pointer;
+  }
+  .modal button.primary-btn:hover { background: #ffd773; }
+  .modal button.primary-btn:active { transform: scale(0.97); }
+  .modal button.primary-btn.danger { background: var(--alert); color: #fff7ec; }
+  .modal button.primary-btn.danger:hover { background: #ff7676; }
+  .modal button.text-btn {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 14px;
+    padding: 10px 14px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--sky);
+    cursor: pointer;
+  }
+  .modal button.text-btn:hover { color: var(--cream); }
+  .modal .error-text {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--alert);
+    margin: -8px 0 12px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .alert-banner { animation: none; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="masthead">
+    <div>
+      <div class="eyebrow">✈️ Family Time Tracker</div>
+      <h1><span class="status-dot" id="status-dot" aria-hidden="true"></span><span id="status-text">On schedule</span></h1>
+      <div class="trip-strip" id="trip-strip"></div>
+    </div>
+  </div>
+
+  <div class="board">
+    <div class="board-grid">
+      <div class="board-col">
+        <div class="col-label">Home</div>
+        <select id="home-tz" class="tz-select"></select>
+        <div class="flap-time" id="home-time">--:--<span class="ampm" id="home-ampm"></span></div>
+        <div class="flap-date" id="home-date">-</div>
+      </div>
+      <div class="board-col">
+        <div class="col-label">Traveling to</div>
+        <select id="dest-tz" class="tz-select"></select>
+        <div class="flap-time" id="dest-time">--:--<span class="ampm" id="dest-ampm"></span></div>
+        <div class="flap-date" id="dest-date">-</div>
+      </div>
+    </div>
+    <div class="diff-strip" id="diff-line"></div>
+  </div>
+
+  <div class="alert-stack" id="alert-stack"></div>
+
+  <div class="tabs" id="member-tabs"></div>
+
+  <div class="ticket-head">
+    <div class="section-title" id="active-member-title">Schedule<span>Times shown in home zone</span></div>
+    <div class="head-actions">
+      <button class="ghost-btn" id="rename-member">Rename</button>
+      <button class="ghost-btn danger" id="remove-member">Remove</button>
+    </div>
+  </div>
+
+  <div class="schedule-list" id="schedule-list"></div>
+
+  <div class="ticket-head" style="margin-top: 10px;">
+    <button class="ghost-btn" id="add-item">+ Add item</button>
+  </div>
+
+  <div class="footer">
+    <label><input type="checkbox" id="sound-toggle" checked /> Sound on alert</label>
+    <button class="ghost-btn" id="test-sound">Test sound</button>
+  </div>
+
+  <div class="push-card" id="push-card">
+    <div class="push-card-text">
+      <div class="push-card-title" id="push-status-title">Push notifications</div>
+      <div class="push-card-sub" id="push-status-sub">Checking status…</div>
+    </div>
+    <button class="ghost-btn" id="push-action-btn">Enable</button>
+  </div>
+
+  <div class="sync-status" id="sync-status"></div>
+
+  <div class="hint" id="bottom-hint">
+    Each alert stays up for 30 minutes or until dismissed with ✕.
+    Schedules sync to your account automatically.
+  </div>
+</div>
+
+<div id="modal-root"></div>
+
+<script src="config.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

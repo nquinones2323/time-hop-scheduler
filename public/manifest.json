@@ -1,0 +1,15 @@
+{
+  "name": "Family Time Tracker",
+  "short_name": "Family Clock",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#142850",
+  "theme_color": "#142850",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
