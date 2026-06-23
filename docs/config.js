@@ -10,5 +10,5 @@ if (!window.FAMILY_CLOCK_API_BASE) {
 // GOING_LIVE.md Step 6). This is the PUBLIC half only — never put the
 // private key here, this file is downloaded by every visitor's browser.
 if (!window.FAMILY_CLOCK_VAPID_PUBLIC_KEY) {
-  window.FAMILY_CLOCK_VAPID_PUBLIC_KEY = "PASTE_YOUR_VAPID_PUBLIC_KEY_HERE";
+  window.FAMILY_CLOCK_VAPID_PUBLIC_KEY = "window.FAMILY_CLOCK_VAPID_PUBLIC_KEY = "BLAKFVKZGf9FTqqmxURXwlVSVhs5lgo3j_l2z195vUNDS4yOYyWmN7SsgDUktcT5UDivJ-MZgGWWtw1rwqflyJE";";
 }
