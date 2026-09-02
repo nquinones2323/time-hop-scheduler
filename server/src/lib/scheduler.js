@@ -57,7 +57,7 @@ export function startScheduleChecker() {
     );
   }
 
-  cron.schedule("* * * * *", async () => {
+  cron.schedule("*/5 * * * *", async () => {
     try {
       await checkAllSchedulesOnce();
     } catch (err) {
