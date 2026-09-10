@@ -12,6 +12,7 @@ let familyId = null;
 let family = null;       // { homeTz, destTz, soundOn, activeTripId }
 let members = [];         // [{ id, name, emoji, order, schedule: [...] }]
 let activeMemberId = null; // client-side only — which tab is open (see DATA_MODEL.md)
+let trips = [];            // [{ id, name, homeTz, destTz, startDate, endDate }]
 
 let firedToday = {};
 let lastDateKey = "";
@@ -67,20 +68,26 @@ function renderTripStrip() {
     dot.classList.add("no-trip");
     statusText.textContent = "No active trip";
     strip.appendChild(document.createTextNode("Add a trip to track travel countdown"));
+    strip.appendChild(el("button", { className: "link-btn", onClick: openTripsModal }, "Manage trips"));
     return;
   }
 
   dot.classList.remove("no-trip");
   statusText.textContent = "Traveling";
   // Active trip name is rendered via textContent below — never via
-  // template-string innerHTML — per the XSS fix.
-  if (family._activeTripName) {
+  // template-string innerHTML — per the XSS fix. Resolved from the actual
+  // trip record (fetched in main()/refreshTrips()), not a field the family
+  // API returns directly — activeTripId is just a pointer, the name lives
+  // on the trip document itself.
+  const activeTrip = trips.find(t => t.id === family.activeTripId);
+  if (activeTrip) {
     strip.appendChild(document.createTextNode("Current trip: "));
-    const nameSpan = el("span", { className: "trip-name" }, family._activeTripName);
-    strip.appendChild(nameSpan);
+    const label = activeTrip.name || `${tzLabel(activeTrip.destTz)}`;
+    strip.appendChild(el("span", { className: "trip-name" }, label));
   } else {
     strip.appendChild(document.createTextNode("Trip in progress"));
   }
+  strip.appendChild(el("button", { className: "link-btn", onClick: openTripsModal }, "Manage trips"));
 }
 
 function renderTabs() {
@@ -387,6 +394,188 @@ function openRenameMemberModal(member) {
   nameInput.select();
 }
 
+// Formats a plain YYYY-MM-DD date string for display, without involving
+// any timezone conversion — trip dates are calendar dates ("the trip
+// starts June 12"), not timestamps, so this deliberately avoids
+// new Date("2026-06-12") + toLocaleDateString() timezone-shift pitfalls.
+function formatTripDate(isoDateStr) {
+  const [y, m, d] = isoDateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
+function todayDateKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+async function refreshTrips() {
+  try {
+    const result = await api.listTrips(familyId);
+    trips = result.trips || [];
+  } catch {
+    // leave trips as whatever we last had; the modal/strip will just show stale data until the next successful refresh
+  }
+}
+
+function openTripsModal() {
+  const root = document.getElementById("modal-root");
+  const backdrop = el("div", { className: "modal-backdrop", onClick: (e) => { if (e.target === backdrop) closeModal(); } });
+
+  const listContainer = el("div", { className: "trip-list" });
+
+  function renderTripList() {
+    listContainer.innerHTML = "";
+    if (!trips.length) {
+      listContainer.appendChild(el("div", { className: "empty-state" }, "No trips yet — add one below."));
+      return;
+    }
+
+    const today = todayDateKey();
+    // Upcoming/current trips first (soonest first), then past trips (most recent first) —
+    // so the list surfaces what's actionable before what's archival.
+    const sorted = trips.slice().sort((a, b) => a.startDate.localeCompare(b.startDate));
+    const upcoming = sorted.filter(t => t.endDate >= today);
+    const past = sorted.filter(t => t.endDate < today).reverse();
+
+    [...upcoming, ...past].forEach(trip => {
+      const isActive = family.activeTripId === trip.id;
+      const isPast = trip.endDate < today;
+      const row = el("div", { className: "trip-row" + (isActive ? " trip-row-active" : "") });
+
+      const info = el("div", { className: "trip-row-info" }, [
+        el("div", { className: "trip-row-name" }, trip.name || tzLabel(trip.destTz)),
+        el("div", { className: "trip-row-dates" }, `${formatTripDate(trip.startDate)} \u2013 ${formatTripDate(trip.endDate)}${isPast ? " (past)" : ""}`),
+      ]);
+      row.appendChild(info);
+
+      const actions = el("div", { className: "trip-row-actions" });
+      if (isActive) {
+        actions.appendChild(el("span", { className: "trip-active-badge" }, "Active"));
+        actions.appendChild(el("button", { className: "ghost-btn", onClick: () => setActiveTrip(null) }, "Clear"));
+      } else {
+        actions.appendChild(el("button", { className: "ghost-btn", onClick: () => setActiveTrip(trip.id) }, "Set active"));
+      }
+      actions.appendChild(el("button", { className: "ghost-btn danger", "aria-label": "Delete trip", onClick: () => confirmDeleteTrip(trip) }, "\u2715"));
+      row.appendChild(actions);
+
+      listContainer.appendChild(row);
+    });
+  }
+
+  async function setActiveTrip(tripId) {
+    try {
+      await withSync("Saving", () => api.updateFamily(familyId, { activeTripId: tripId }));
+      family.activeTripId = tripId;
+      renderTripList();
+      renderTripStrip();
+    } catch {
+      // error already shown via sync status
+    }
+  }
+
+  // Uses a locally-scoped confirm overlay rather than the shared
+  // showConfirmModal() helper — that helper wipes the entire #modal-root on
+  // close (root.innerHTML = ""), which is fine when it's the only modal
+  // open, but here it's nested inside the already-open trips modal, so
+  // wiping the whole root would destroy the trips modal underneath it too.
+  // Caught in testing: this was the first place in the app where one modal
+  // opens from within another, and it exposed that showConfirmModal was
+  // never actually safe to nest.
+  function confirmDeleteTrip(trip) {
+    return new Promise((resolve) => {
+      const overlay = el("div", { className: "modal-backdrop nested-confirm", onClick: (e) => { if (e.target === overlay) finish(false); } });
+      const finish = (result) => {
+        overlay.remove();
+        resolve(result);
+      };
+      const inner = el("div", { className: "modal" }, [
+        el("h2", {}, "Delete this trip?"),
+        el("p", { className: "modal-sub" }, `${trip.name || tzLabel(trip.destTz)} (${formatTripDate(trip.startDate)} \u2013 ${formatTripDate(trip.endDate)}) will be removed.`),
+        el("div", { className: "modal-actions" }, [
+          el("button", { className: "text-btn", onClick: () => finish(false) }, "Cancel"),
+          el("button", { className: "primary-btn danger", onClick: () => finish(true) }, "Delete"),
+        ]),
+      ]);
+      overlay.appendChild(inner);
+      document.body.appendChild(overlay); // attaches to body, not modal-root, so it survives independently of the trips modal's own lifecycle
+    }).then(async (confirmed) => {
+      if (!confirmed) return;
+      try {
+        await withSync("Deleting", () => api.deleteTrip(familyId, trip.id));
+        trips = trips.filter(t => t.id !== trip.id);
+        if (family.activeTripId === trip.id) family.activeTripId = null;
+        renderTripList();
+        renderTripStrip();
+      } catch {
+        // error already shown via sync status
+      }
+    });
+  }
+
+  renderTripList();
+
+  // --- New trip form ---
+  const nameInput = el("input", { type: "text", placeholder: "e.g. Grandma's house (optional)", maxlength: "100" });
+  const destSelect = el("select");
+  populateSelect(destSelect, family.destTz);
+  const startInput = el("input", { type: "date" });
+  const endInput = el("input", { type: "date" });
+  const errorBox = el("div", { className: "error-text", style: "display:none;" });
+
+  const submitNewTrip = async () => {
+    errorBox.style.display = "none";
+    if (!startInput.value || !endInput.value) {
+      errorBox.textContent = "Pick a start and end date.";
+      errorBox.style.display = "block";
+      return;
+    }
+    if (endInput.value < startInput.value) {
+      errorBox.textContent = "End date can't be before the start date.";
+      errorBox.style.display = "block";
+      return;
+    }
+    try {
+      const newTrip = await withSync("Adding trip", () => api.createTrip(familyId, {
+        name: nameInput.value.trim() || undefined,
+        homeTz: family.homeTz,
+        destTz: destSelect.value,
+        startDate: startInput.value,
+        endDate: endInput.value,
+      }));
+      trips.push(newTrip);
+      nameInput.value = "";
+      startInput.value = "";
+      endInput.value = "";
+      renderTripList();
+    } catch (err) {
+      errorBox.textContent = err instanceof ApiError ? err.message : "Something went wrong. Try again.";
+      errorBox.style.display = "block";
+    }
+  };
+
+  const modal = el("div", { className: "modal modal-wide" }, [
+    el("h2", {}, "Trips"),
+    el("p", { className: "modal-sub" }, "Plan travel and switch which trip is active."),
+    listContainer,
+    el("div", { className: "trip-form-divider" }),
+    el("label", { className: "field-label" }, "New trip"),
+    nameInput,
+    el("label", { className: "field-label" }, "Destination time zone"),
+    destSelect,
+    el("div", { className: "trip-date-row" }, [
+      el("div", {}, [el("label", { className: "field-label" }, "Start"), startInput]),
+      el("div", {}, [el("label", { className: "field-label" }, "End"), endInput]),
+    ]),
+    errorBox,
+    el("div", { className: "modal-actions" }, [
+      el("button", { className: "text-btn", onClick: closeModal }, "Close"),
+      el("button", { className: "primary-btn", onClick: submitNewTrip }, "Add trip"),
+    ]),
+  ]);
+  backdrop.appendChild(modal);
+  root.appendChild(backdrop);
+}
 document.getElementById("rename-member").addEventListener("click", () => {
   const member = activeMember();
   if (member) openRenameMemberModal(member);
@@ -636,6 +825,11 @@ async function main() {
     setSyncStatus("Couldn't load your data — check your network and reload", true);
     return;
   }
+
+  // Trips load separately and don't block the rest of the app from
+  // rendering — if this fails, the trip strip just falls back to "Trip in
+  // progress" (no resolved name) instead of blocking the whole page.
+  await refreshTrips();
 
   populateSelect(homeSel, family.homeTz);
   populateSelect(destSel, family.destTz);
