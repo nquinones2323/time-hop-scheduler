@@ -481,6 +481,7 @@
     z-index: 50;
     padding: 0;
   }
+  .modal-backdrop.nested-confirm { z-index: 60; }
   @media (min-width: 480px) {
     .modal-backdrop { align-items: center; padding: 1rem; }
   }
@@ -516,7 +517,7 @@
     color: var(--sky);
     margin-bottom: 6px;
   }
-  .modal input[type="text"], .modal select {
+  .modal input[type="text"], .modal select, .modal input[type="date"] {
     width: 100%;
     font-family: var(--display);
     font-size: 15px;
@@ -527,7 +528,69 @@
     color: var(--cream);
     margin-bottom: 14px;
   }
-  .modal input[type="text"]:focus { outline: 1px solid var(--amber); }
+  .modal input[type="text"]:focus, .modal input[type="date"]:focus { outline: 1px solid var(--amber); }
+  /* Safari/iOS renders the native date-picker indicator dark-on-dark by
+     default against this navy background; invert it so it's actually
+     visible rather than looking like a missing icon. */
+  .modal input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.7; }
+
+  /* Trip planner modal */
+  .modal.modal-wide { max-width: 560px; }
+  .trip-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+    margin-bottom: 4px;
+  }
+  .trip-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: var(--navy-3);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+  .trip-row-active { border-color: var(--amber); }
+  .trip-row-info { min-width: 0; }
+  .trip-row-name {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--cream);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .trip-row-dates {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--sky);
+    margin-top: 2px;
+  }
+  .trip-row-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .trip-active-badge {
+    font-family: var(--mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--amber);
+    border: 1px solid var(--amber);
+    border-radius: 3px;
+    padding: 3px 6px;
+  }
+  .trip-form-divider {
+    border-top: 1px dashed var(--line);
+    margin: 14px 0 16px;
+  }
+  .trip-date-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .trip-date-row .field-label { margin-top: 0; }
   .modal .modal-actions {
     display: flex;
     gap: 8px;
